@@ -1,0 +1,62 @@
+{
+  "name": "@timadey/proctor",
+  "version": "1.2.3",
+  "description": "AI-powered exam proctoring with MediaPipe - JavaScript library",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "jest",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint src/**/*.{js,jsx}",
+    "format": "prettier --write src/**/*.{js,jsx}"
+  },
+  "keywords": [
+    "proctoring",
+    "exam",
+    "monitoring",
+    "mediapipe",
+    "webrtc",
+    "computer-vision",
+    "face-detection",
+    "gaze-tracking",
+    "vanilla-js"
+  ],
+  "author": "Timothy Adeleke",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Timadey/proctoring-sensors.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Timadey/proctoring-sensors/issues"
+  },
+  "homepage": "https://github.com/Timadey/proctoring-sensors#readme",
+  "peerDependencies": {},
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.8"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "eslint": "^8.52.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.3",
+    "rollup": "^4.1.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
