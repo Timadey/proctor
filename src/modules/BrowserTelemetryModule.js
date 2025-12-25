@@ -144,7 +144,7 @@ export class BrowserTelemetryModule {
     handleWindowFocus() {
         this.state.isFocused = true;
 
-        this.emitEvent('WINDOW_FOCUS_RESTORED', 2, {
+        this.emitEvent('WINDOW_FOCUS_SWITCHED', 10, {
             focused: true,
             duration: this.state.lastFocusLossTime ?
                 Date.now() - this.state.lastFocusLossTime : 0

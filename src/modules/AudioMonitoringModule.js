@@ -1,15 +1,16 @@
 /**
- * AudioMonitoringModule
- * Handles audio monitoring: talking, whispering, silence detection
+ * Enhanced Audio Monitoring Module
+ * Comprehensive audio monitoring with all features from EnhancedProctoringEngine
+ * Includes: talking detection, whispering, silence tracking, audio-visual correlation
  */
 
 export class AudioMonitoringModule {
     constructor(options = {}) {
         this.options = {
-            talkingThreshold: -45,
+            talkingThreshold: -40, // More sensitive from EnhancedProctoringEngine
             whisperThreshold: -55,
             audioSampleInterval: 100,
-            prolongedTalkingDuration: 3000,
+            prolongedTalkingDuration: 1000, // 1 second from EnhancedProctoringEngine
             onEvent: null,
             onStateChange: null,
             ...options
@@ -22,18 +23,27 @@ export class AudioMonitoringModule {
         this.audioMonitorInterval = null;
         this.isSetup = false;
 
+        // Event throttling (per event type)
+        this.eventThrottle = {
+            lastEmittedAt: Object.create(null),
+            intervalMs: 1000 // 1 second
+        };
+
         // State tracking
         this.state = {
             isTalking: false,
             isWhispering: false,
             currentAudioLevel: -100,
+            currentFrequencyDb: -100,
+            currentRMS: 0,
             audioLevelHistory: [],
             talkingStartTime: null,
             whisperingStartTime: null,
             totalTalkingDuration: 0,
             totalWhisperingDuration: 0,
             silenceDuration: 0,
-            lastSoundTime: Date.now()
+            lastSoundTime: Date.now(),
+            sessionStartTime: Date.now()
         };
     }
 
@@ -60,6 +70,7 @@ export class AudioMonitoringModule {
             this.microphone.connect(this.analyser);
 
             this.isSetup = true;
+            this.state.sessionStartTime = Date.now();
             console.log('✅ AudioMonitoringModule initialized');
 
         } catch (error) {
@@ -80,6 +91,8 @@ export class AudioMonitoringModule {
         this.audioMonitorInterval = setInterval(() => {
             this.processAudio();
         }, this.options.audioSampleInterval);
+
+        console.log('🎤 Audio monitoring started');
     }
 
     /**
@@ -100,32 +113,54 @@ export class AudioMonitoringModule {
     }
 
     /**
-     * Process audio
+     * Process audio (enhanced from EnhancedProctoringEngine)
      */
     processAudio() {
         if (!this.analyser) return;
 
         const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-        this.analyser.getByteFrequencyData(dataArray);
+        const timeArray = new Uint8Array(this.analyser.fftSize);
 
-        // Calculate RMS
-        const rms = Math.sqrt(
-            dataArray.reduce((sum, val) => sum + val * val, 0) / dataArray.length
-        );
-        const decibels = 20 * Math.log10(rms / 255);
+        this.analyser.getByteFrequencyData(dataArray);
+        this.analyser.getByteTimeDomainData(timeArray);
+
+        // Calculate RMS (Root Mean Square) for better audio detection
+        let sum = 0;
+        for (let i = 0; i < timeArray.length; i++) {
+            const normalized = (timeArray[i] - 128) / 128;
+            sum += normalized * normalized;
+        }
+        const rms = Math.sqrt(sum / timeArray.length);
+        const decibels = 20 * Math.log10(rms);
+
+        // Calculate average frequency
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        const frequencyDb = 20 * Math.log10(average / 255);
 
         // Update state
         this.state.currentAudioLevel = decibels;
-        this.state.audioLevelHistory.push(decibels);
-        if (this.state.audioLevelHistory.length > 10) {
+        this.state.currentFrequencyDb = frequencyDb;
+        this.state.currentRMS = rms;
+        this.state.audioLevelHistory.push({
+            decibels,
+            frequencyDb,
+            average,
+            timestamp: Date.now()
+        });
+
+        // Keep last 30 samples
+        if (this.state.audioLevelHistory.length > 30) {
             this.state.audioLevelHistory.shift();
         }
 
         const now = Date.now();
         const { talkingThreshold, whisperThreshold, prolongedTalkingDuration } = this.options;
 
+        // Improved talking detection (from EnhancedProctoringEngine)
+        const isTalkingByAudio = decibels > talkingThreshold && average > 5;
+
         // Check for talking
-        if (decibels > talkingThreshold) {
+        if (isTalkingByAudio) {
             this.state.lastSoundTime = now;
             this.state.silenceDuration = 0;
 
@@ -140,19 +175,31 @@ export class AudioMonitoringModule {
             if (duration > prolongedTalkingDuration) {
                 this.emitEvent('TALKING_DETECTED', 8, {
                     duration: duration,
-                    level: decibels,
+                    decibels: decibels.toFixed(2),
+                    frequencyDb: frequencyDb.toFixed(2),
+                    average: average.toFixed(2),
+                    detectionMethod: 'audio',
                     severity: 'high'
                 });
-                // Reset to avoid spam
-                this.state.talkingStartTime = now;
             }
         } else {
+            // Talking ended
+            if (this.state.isTalking && this.state.talkingStartTime) {
+                const finalDuration = now - this.state.talkingStartTime;
+                if (finalDuration > 500) {
+                    this.emitEvent('TALKING_EPISODE', 7, {
+                        duration: finalDuration,
+                        severity: 'high',
+                        detectionMethod: 'audio'
+                    });
+                }
+            }
             this.state.isTalking = false;
             this.state.talkingStartTime = null;
         }
 
         // Check for whispering
-        if (decibels > whisperThreshold && decibels <= talkingThreshold) {
+        if (decibels > whisperThreshold && decibels <= talkingThreshold && average > 3) {
             this.state.lastSoundTime = now;
             this.state.silenceDuration = 0;
 
@@ -167,11 +214,10 @@ export class AudioMonitoringModule {
             if (duration > prolongedTalkingDuration) {
                 this.emitEvent('WHISPERING_DETECTED', 7, {
                     duration: duration,
-                    level: decibels,
+                    level: decibels.toFixed(2),
+                    frequencyDb: frequencyDb.toFixed(2),
                     severity: 'medium'
                 });
-                // Reset to avoid spam
-                this.state.whisperingStartTime = now;
             }
         } else {
             this.state.isWhispering = false;
@@ -188,9 +234,26 @@ export class AudioMonitoringModule {
     }
 
     /**
-     * Emit event
+     * Check if an event can be emitted based on throttle rules
+     */
+    canEmitEvent(eventType) {
+        const now = Date.now();
+        const last = this.eventThrottle.lastEmittedAt[eventType] || 0;
+
+        if (now - last < this.eventThrottle.intervalMs) {
+            return false;
+        }
+
+        this.eventThrottle.lastEmittedAt[eventType] = now;
+        return true;
+    }
+
+    /**
+     * Emit event with throttling
      */
     emitEvent(type, severity, metadata = {}) {
+        if (!this.canEmitEvent(type)) return;
+
         if (this.options.onEvent) {
             this.options.onEvent({
                 event: type,
@@ -222,8 +285,48 @@ export class AudioMonitoringModule {
      */
     getAverageAudioLevel() {
         if (this.state.audioLevelHistory.length === 0) return -100;
-        return this.state.audioLevelHistory.reduce((a, b) => a + b, 0) /
+        return this.state.audioLevelHistory.reduce((sum, item) => sum + item.decibels, 0) /
             this.state.audioLevelHistory.length;
+    }
+
+    /**
+     * Get audio statistics
+     */
+    getAudioStatistics() {
+        const sessionDuration = (Date.now() - this.state.sessionStartTime) / 1000; // seconds
+
+        return {
+            sessionDurationSeconds: sessionDuration,
+            totalTalkingDuration: this.state.totalTalkingDuration,
+            totalWhisperingDuration: this.state.totalWhisperingDuration,
+            talkingPercentage: (this.state.totalTalkingDuration / (sessionDuration * 1000)) * 100,
+            whisperingPercentage: (this.state.totalWhisperingDuration / (sessionDuration * 1000)) * 100,
+            averageAudioLevel: this.getAverageAudioLevel(),
+            currentSilenceDuration: this.state.silenceDuration,
+            isTalking: this.state.isTalking,
+            isWhispering: this.state.isWhispering
+        };
+    }
+
+    /**
+     * Check if currently talking (for audio-visual correlation)
+     */
+    isTalking() {
+        return this.state.isTalking;
+    }
+
+    /**
+     * Check if currently whispering
+     */
+    isWhispering() {
+        return this.state.isWhispering;
+    }
+
+    /**
+     * Get talking start time (for audio-visual correlation)
+     */
+    getTalkingStartTime() {
+        return this.state.talkingStartTime;
     }
 
     /**

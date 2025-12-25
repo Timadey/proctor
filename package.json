@@ -1,6 +1,6 @@
 {
   "name": "@timadey/proctor",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "AI-powered exam proctoring with MediaPipe - JavaScript library",
   "type": "module",
   "main": "dist/index.js",
@@ -40,7 +40,6 @@
     "url": "https://github.com/Timadey/proctoring-sensors/issues"
   },
   "homepage": "https://github.com/Timadey/proctoring-sensors#readme",
-  "peerDependencies": {},
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.8"
   },

@@ -84,16 +84,16 @@ export class ProctoringEngine {
             }
 
             // Initialize Audio Monitoring Module
-            // if (this.options.enableAudioMonitoring) {
-            //     this.audioModule = new AudioMonitoringModule({
-            //         talkingThreshold: this.options.talkingThreshold || -45,
-            //         whisperThreshold: this.options.whisperThreshold || -55,
-            //         audioSampleInterval: this.options.audioSampleInterval || 100,
-            //         onEvent: (event) => this.handleModuleEvent('audio', event),
-            //         onStateChange: (state) => this.stateManager.updateAudioState(state)
-            //     });
-            //     await this.audioModule.initialize();
-            // }
+            if (this.options.enableAudioMonitoring) {
+                this.audioModule = new AudioMonitoringModule({
+                    talkingThreshold: this.options.talkingThreshold || -45,
+                    whisperThreshold: this.options.whisperThreshold || -55,
+                    audioSampleInterval: this.options.audioSampleInterval || 100,
+                    onEvent: (event) => this.handleModuleEvent('audio', event),
+                    onStateChange: (state) => this.stateManager.updateAudioState(state)
+                });
+                await this.audioModule.initialize();
+            }
 
             // Initialize Pattern Detection Module
             if (this.options.enablePatternDetection) {

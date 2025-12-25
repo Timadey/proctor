@@ -1,12 +1,12 @@
 /**
- * Enhanced VisualDetectionModule
- * Comprehensive visual detection with all methods from EnhancedAIProctoringClient
- * Includes: gaze tracking, head pose, mouth movement, eye state, hand detection
+ * Enhanced Visual Detection Module
+ * Combines accurate measurements from EnhancedProctoringEngine with
+ * initialization format and event throttling from VisualDetectionModuleOld
  */
 
 import { FaceLandmarker, HandLandmarker, ObjectDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 import { modelCache } from '../ModelCache.js';
-import { FaceFeaturesExtractor} from "../managers/FeaturesManager.js";
+import { FaceFeaturesExtractor } from "../managers/FeaturesManager.js";
 
 export class VisualDetectionModule {
     static sharedModels = {
@@ -45,6 +45,12 @@ export class VisualDetectionModule {
         this.frameCount = 0;
         this.fps = options.detectionFPS || 30;
 
+        // Event throttling (per event type)
+        this.eventThrottle = {
+            lastEmittedAt: Object.create(null),
+            intervalMs: 1000 // 1 second
+        };
+
         // Event stability tracking
         this.eventStability = {
             gazeCounter: 0,
@@ -59,12 +65,6 @@ export class VisualDetectionModule {
             handCoveringFace: 0,
             phoneDetected: 0
         };
-        // Event throttling (per event type)
-        this.eventThrottle = {
-            lastEmittedAt: Object.create(null),
-            intervalMs: 1000 // 1 second
-        };
-
 
         // State tracking
         this.state = {
@@ -265,8 +265,6 @@ export class VisualDetectionModule {
 
             // Detect faces
             const faceResults = this.faceLandmarker.detectForVideo(this.videoElement, timestamp);
-
-            // console.log('Face results:', faceResults);
             this.state.faceLandmarks = faceResults;
             const numFaces = faceResults.faceLandmarks?.length || 0;
 
@@ -275,13 +273,12 @@ export class VisualDetectionModule {
 
             if (numFaces === 1) {
                 const landmarks = faceResults.faceLandmarks[0];
-                // Enhanced face analysis
+                // Enhanced face analysis using accurate measurements
                 this.analyzeEnhancedGaze(landmarks);
                 this.analyzeHeadPose(landmarks);
                 this.analyzeEyeState(landmarks);
                 this.analyzeMouthMovement(landmarks);
-                this.detectMouthCovering(landmarks);
-
+                // this.detectMouthCovering(landmarks);
             } else if (numFaces === 0) {
                 this.handleNoFaceDetected();
             }
@@ -333,21 +330,17 @@ export class VisualDetectionModule {
                     if (!this.state.personLeftStartTime) {
                         this.state.personLeftStartTime = now;
                     }
-                    this.emitEvent('PERSON_LEFT', 10, {
+                    this.emitEvent('PERSON_LEFT', "critical", {
                         duration: now - this.state.personLeftStartTime,
                         severity: 'critical'
                     });
                 }
             }
         } else if (numFaces > 1) {
-            this.eventStability.multipleFaces++;
-            if (this.eventStability.multipleFaces >= stabilityFrames) {
-                this.emitEvent('MULTIPLE_FACES', 10, {
-                    faces: numFaces,
-                    severity: 'critical'
-                });
-                this.eventStability.multipleFaces = 0;
-            }
+            this.emitEvent('MULTIPLE_FACES', 10, {
+                faces: numFaces,
+                severity: 'critical'
+            });
         } else {
             this.eventStability.noFace = 0;
             this.eventStability.multipleFaces = 0;
@@ -368,7 +361,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Enhanced gaze analysis with iris tracking
+     * Enhanced gaze analysis with iris tracking (from EnhancedProctoringEngine)
      */
     analyzeEnhancedGaze(landmarks) {
         // Left eye landmarks
@@ -427,15 +420,16 @@ export class VisualDetectionModule {
                 gazeY: avgGazeY.toFixed(3),
                 severity
             });
-        } else if (avgGazeY < 0.35) {
-            gazeDirection = 'up';
-            severity = avgGazeY < 0.25 ? 'high' : 'medium';
-            this.emitEvent('LOOKING_UP', 6, {
-                direction: 'up',
-                gazeY: avgGazeY.toFixed(3),
-                severity
-            });
         }
+        // else if (avgGazeY < 0.35) {
+        //     gazeDirection = 'up';
+        //     severity = avgGazeY < 0.25 ? 'high' : 'medium';
+        //     this.emitEvent('LOOKING_UP', 6, {
+        //         direction: 'up',
+        //         gazeY: avgGazeY.toFixed(3),
+        //         severity
+        //     });
+        // }
 
         // Track gaze duration
         const now = Date.now();
@@ -450,23 +444,11 @@ export class VisualDetectionModule {
 
             // Alert if looking away for more than 3 seconds
             if (duration > 3000) {
-                this.emitEvent('LOOKING_AWAY_EXTENDED', 7, {
+                this.emitEvent('SUSTAINED_LOOK_AWAY', 9, {
                     direction: gazeDirection,
                     duration: duration,
                     gazeX: avgGazeX.toFixed(3),
                     gazeY: avgGazeY.toFixed(3),
-                    severity: 'high'
-                });
-            }
-
-            // Sustained look away (5+ seconds)
-            if (duration > 5000 && !this.state.sustainedLookAwayTriggered) {
-                this.state.sustainedLookAwayTriggered = true;
-                this.emitEvent('SUSTAINED_LOOK_AWAY', 9, {
-                    direction: gazeDirection,
-                    duration: duration,
-                    severity: 'critical',
-                    note: 'User has been looking away for a sustained period'
                 });
             }
         }
@@ -476,7 +458,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Enhanced head pose estimation
+     * Enhanced head pose estimation (from EnhancedProctoringEngine)
      */
     analyzeHeadPose(landmarks) {
         const noseTip = landmarks[1];
@@ -520,7 +502,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Eye state analysis (blink detection, eye closure)
+     * Eye state analysis (from EnhancedProctoringEngine)
      */
     analyzeEyeState(landmarks) {
         // Calculate Eye Aspect Ratio (EAR) for blink detection
@@ -589,22 +571,10 @@ export class VisualDetectionModule {
         const sessionDuration = (now - this.state.sessionStartTime) / 1000 / 60; // minutes
 
         if (sessionDuration > 1 && this.state.currentGazeDirection !== 'center') {
-            const blinksPerMinute = this.state.blinkCount / sessionDuration;
-
-            // // Abnormally low blink rate while looking away
-            // if (blinksPerMinute < 8) {
-            //     this.emitEvent('ABNORMAL_BLINK_RATE', 7, {
-            //         blinksPerMinute: blinksPerMinute.toFixed(1),
-            //         gazeDirection: this.state.currentGazeDirection,
-            //         severity: 'high',
-            //         note: 'Unusually low blink rate while looking away'
-            //     });
-            // }
-
             // No blink detection while looking away (suggests focused reading)
             const timeSinceLastBlink = now - this.state.lastBlinkTime;
             if (timeSinceLastBlink > 10000) { // 10 seconds without blinking
-                this.emitEvent('SUSPICIOUS_GAZE_READING', 8, {
+                this.emitEvent('SUSPICIOUS_GAZE_READING', 9, {
                     durationSinceBlink: timeSinceLastBlink,
                     direction: this.state.currentGazeDirection,
                     severity: 'critical',
@@ -615,7 +585,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Comprehensive mouth movement analysis
+     * Comprehensive mouth movement analysis (from EnhancedProctoringEngine)
      */
     analyzeMouthMovement(landmarks) {
         // Upper and lower lip landmarks
@@ -683,9 +653,9 @@ export class VisualDetectionModule {
                 const talkingDuration = now - this.state.talkingByMouthStartTime;
                 this.state.mouthTalkingDuration += 1000 / this.fps;
 
-                // Alert if talking detected by mouth movement for more than 3 second
-                if (talkingDuration > 3000) {
-                    this.emitEvent('TALKING_DETECTED', 8, {
+                // Alert if talking detected by mouth movement for more than 1 second
+                if (talkingDuration > 1000) {
+                    this.emitEvent('TALKING_DETECTED', 9, {
                         duration: talkingDuration,
                         mouthOpenness: mouthOpenness.toFixed(4),
                         mouthMovement: mouthMovement.toFixed(4),
@@ -709,44 +679,12 @@ export class VisualDetectionModule {
                 this.state.talkingByMouthStartTime = null;
                 this.state.isTalkingByMouth = false;
             }
-
-            // // Also detect general mouth movement (could be mouthing words)
-            // if (mouthMovement > MOVEMENT_THRESHOLD * 0.5) {
-            //     this.emitEvent('MOUTH_MOVEMENT', 5, {
-            //         movement: mouthMovement.toFixed(4),
-            //         openness: mouthOpenness.toFixed(4),
-            //         severity: 'medium'
-            //     });
-            // }
         }
     }
 
-    /**
-     * Detect mouth covering or obscuring
-     */
-    detectMouthCovering(landmarks) {
-        const upperLip = landmarks[13];
-        const lowerLip = landmarks[14];
-        const leftMouth = landmarks[61];
-        const rightMouth = landmarks[291];
-
-        const mouthHeight = Math.abs(lowerLip.y - upperLip.y);
-        const mouthWidth = Math.abs(rightMouth.x - leftMouth.x);
-
-        // Check for visibility if available
-        if (upperLip.visibility !== undefined && lowerLip.visibility !== undefined) {
-            const avgVisibility = (upperLip.visibility + lowerLip.visibility) / 2;
-            if (avgVisibility < 0.3) {
-                this.emitEvent('MOUTH_OBSCURED', 6, {
-                    visibility: avgVisibility.toFixed(3),
-                    severity: 'high'
-                });
-            }
-        }
-    }
 
     /**
-     * Analyze hand activity
+     * Analyze hand activity (from EnhancedProctoringEngine)
      */
     analyzeHandActivity(leftHand, rightHand, faceLandmarks) {
         const now = Date.now();
@@ -770,9 +708,8 @@ export class VisualDetectionModule {
 
         // Record alerts
         if (handCoveringFace) {
-            this.emitEvent('HAND_COVERING_FACE', 9, {
+            this.emitEvent('HAND_COVERING_FACE', 6, {
                 timestamp: now,
-                severity: 'critical'
             });
         } else if (handNearFace) {
             if (!this.state.handNearFaceStartTime) {
@@ -781,9 +718,8 @@ export class VisualDetectionModule {
 
             const duration = now - this.state.handNearFaceStartTime;
             if (duration > 2000) { // Hand near face for 2+ seconds
-                this.emitEvent('HAND_NEAR_FACE', 7, {
+                this.emitEvent('HAND_NEAR_FACE', 5, {
                     duration: duration,
-                    severity: 'medium'
                 });
             }
         } else {
@@ -801,7 +737,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Analyze hand proximity to face
+     * Analyze hand proximity to face (from EnhancedProctoringEngine)
      */
     analyzeHandProximity(hand, faceLandmarks, handSide) {
         // Get face boundaries
@@ -840,7 +776,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Detect phone gesture
+     * Detect phone gesture (from EnhancedProctoringEngine)
      */
     detectPhoneGesture(leftHand, rightHand, faceLandmarks) {
         const checkPhonePose = (hand, handSide) => {
@@ -874,7 +810,7 @@ export class VisualDetectionModule {
         const rightPhone = rightHand ? checkPhonePose(rightHand, 'right') : false;
 
         if (leftPhone || rightPhone) {
-            this.emitEvent('PHONE_DETECTED', 10, {
+            this.emitEvent('PHONE_DETECTED', 9, {
                 hand: leftPhone ? 'left' : 'right',
                 severity: 'critical',
                 note: 'Hand pose suggests phone usage'
@@ -883,7 +819,7 @@ export class VisualDetectionModule {
     }
 
     /**
-     * Get face bounds
+     * Get face bounds (from EnhancedProctoringEngine)
      */
     getFaceBounds(landmarks) {
         const xs = landmarks.map(lm => lm.x);
@@ -977,15 +913,19 @@ export class VisualDetectionModule {
         return true;
     }
 
-
     /**
-     * Emit event
+     * Emit event with throttling
      */
     emitEvent(type, severity, metadata = {}) {
         if (!this.canEmitEvent(type)) return;
+
         const featuresExtractor = new FaceFeaturesExtractor(
-            this.videoElement.videoWidth, this.videoElement.videoHeight, this.state.faceLandmarks, this.state.handResults
+            this.videoElement.videoWidth,
+            this.videoElement.videoHeight,
+            this.state.faceLandmarks,
+            this.state.handResults
         );
+
         if (this.options.onEvent) {
             this.options.onEvent({
                 event: type,
@@ -997,8 +937,6 @@ export class VisualDetectionModule {
             });
         }
     }
-
-
 
     /**
      * Emit state change

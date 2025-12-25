@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Proctoring Vanilla Demo</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f3f4f6;
+            padding: 40px;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            background: #9ca3af;
+        }
+
+        .ingest-config {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .session-badge {
+            font-size: 11px;
+            background: #e5e7eb;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #4b5563;
+            font-family: monospace;
+        }
+
+        .ingest-config label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4b5563;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 13px;
+            background: white;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .radio-label input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            background: #3b82f6;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .info-text {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        #event-log {
+            margin-top: 24px;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+        }
+
+        .event-item {
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .event-type { font-weight: 600; }
+        .event-time { color: #9ca3af; font-size: 12px; }
+        .severity-high { border-left: 4px solid #ef4444; background: #fee2e2; }
+        .severity-medium { border-left: 4px solid #f59e0b; background: #fef3c7; }
+        .severity-low { border-left: 4px solid #10b981; background: #ecfdf5; }
+
+        #video-file-section {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h1>🔍 AI Proctoring Demo</h1>
+
+    <div class="ingest-config">
+        <div class="config-header">
+            <label for="ingest-url">Ingestion Endpoint (Optional)</label>
+            <span class="session-badge">Session: <span id="session-display">...</span></span>
+        </div>
+        <input type="text" id="ingest-url" placeholder="https://your-api.com/v1/ingest" />
+        <p class="info-text" style="margin-top: 5px; font-size: 11px;">
+            Leave empty to run local-only. If provided, features will be sent via POST.
+        </p>
+    </div>
+
+    <div class="ingest-config">
+        <div class="config-header">
+            <label>Video Source</label>
+        </div>
+        <div class="radio-group">
+            <label class="radio-label">
+                <input type="radio" name="video-source" value="camera" id="source-camera" checked />
+                <span>📹 Use Camera</span>
+            </label>
+            <label class="radio-label">
+                <input type="radio" name="video-source" value="file" id="source-file" />
+                <span>📁 Upload Video</span>
+            </label>
+        </div>
+        <div id="video-file-section">
+            <input type="file" id="video-file" accept="video/*" />
+            <p class="info-text" style="margin-top: 5px; font-size: 11px;">
+                Select a video file (MP4, WebM, etc.) to analyze
+            </p>
+        </div>
+    </div>
+
+    <div class="video-container">
+        <video id="webcam" autoplay playsinline muted></video>
+        <div id="status" class="status-badge">Initializing...</div>
+    </div>
+
+    <div class="controls">
+        <button id="start-btn" disabled>Start Proctoring</button>
+        <button id="stop-btn" disabled>Stop</button>
+        <span id="init-info" class="info-text">Waiting for models...</span>
+    </div>
+
+    <h3>Latest Events</h3>
+    <div id="event-log">
+        <i>No events yet. Start proctoring to begin monitoring.</i>
+    </div>
+</div>
+
+<script type="module">
+    import { ProctoringEngine } from './src/index.js';
+
+    const video = document.getElementById('webcam');
+    const statusBadge = document.getElementById('status');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const eventLog = document.getElementById('event-log');
+    const initInfo = document.getElementById('init-info');
+    const ingestUrlInput = document.getElementById('ingest-url');
+    const sessionDisplay = document.getElementById('session-display');
+    const sourceCameraRadio = document.getElementById('source-camera');
+    const sourceFileRadio = document.getElementById('source-file');
+    const videoFileInput = document.getElementById('video-file');
+    const videoFileSection = document.getElementById('video-file-section');
+
+    class FeatureIngestClient {
+        constructor(endpoint, sessionId) {
+            this.endpoint = endpoint;
+            this.sessionId = sessionId;
+            this.lastSentAt = 0;
+            this.MIN_INTERVAL_MS = 200;
+        }
+
+        async sendFeatures(extractedFeatures) {
+            const now = Date.now();
+            if (now - this.lastSentAt < this.MIN_INTERVAL_MS) return;
+            this.lastSentAt = now;
+
+            try {
+                await fetch(this.endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: this.sessionId,
+                        extracted_features: extractedFeatures,
+                    }),
+                });
+            } catch (err) {
+                console.warn('[FeatureIngest] Failed to send features', err);
+            }
+        }
+    }
+
+    // Initialize Session ID and display it
+    const SESSION_ID = 'test-session-' + Math.floor(Math.random() * 1000);
+    sessionDisplay.innerText = SESSION_ID;
+
+    let ingestClient = null;
+    let currentVideoSource = null;
+
+    // Handle video source selection
+    function updateVideoSourceUI() {
+        if (sourceFileRadio.checked) {
+            videoFileSection.style.display = 'block';
+        } else {
+            videoFileSection.style.display = 'none';
+        }
+    }
+
+    sourceCameraRadio.addEventListener('change', updateVideoSourceUI);
+    sourceFileRadio.addEventListener('change', updateVideoSourceUI);
+    updateVideoSourceUI();
+
+    const proctor = ProctoringEngine.getInstance({
+        onEvent: (e) => {
+            const div = document.createElement('div');
+            const severity = e.lv >= 8 ? 'high' : e.lv >= 5 ? 'medium' : 'low';
+            div.className = `event-item severity-${severity}`;
+            div.innerHTML = `
+                    <span class="event-type">${e.event} (Dir: ${e.direction}, Dur: ${e.duration}ms)</span>
+                    <span class="event-time">${new Date(e.ts).toLocaleTimeString()}</span>
+                `;
+
+            if (eventLog.firstChild && eventLog.firstChild.nodeName === 'I') {
+                eventLog.innerHTML = '';
+            }
+            eventLog.prepend(div);
+
+            if (ingestClient && e.extractedFeatures) {
+                ingestClient.sendFeatures(e.extractedFeatures);
+            }
+        },
+        onStatusChange: (status) => {
+            statusBadge.innerText = status.toUpperCase();
+            const colors = {
+                'ready': '#10b981',
+                'loading-models': '#3b82f6',
+                'error': '#ef4444',
+                'initializing': '#9ca3af'
+            };
+            statusBadge.style.background = colors[status] || '#9ca3af';
+
+            if (status === 'ready') {
+                startBtn.disabled = false;
+                initInfo.innerText = 'Models ready.';
+            }
+        },
+        onError: (err) => console.error('Proctoring Engine Error:', err)
+    });
+
+    startBtn.onclick = async () => {
+        const url = ingestUrlInput.value.trim();
+        if (url) {
+            ingestClient = new FeatureIngestClient(url, SESSION_ID);
+            ingestUrlInput.disabled = true;
+        } else {
+            ingestClient = null;
+        }
+
+        try {
+            if (sourceCameraRadio.checked) {
+                // Use camera
+                initInfo.innerText = 'Requesting camera...';
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720 }
+                });
+                video.srcObject = stream;
+                currentVideoSource = 'camera';
+            } else {
+                // Use uploaded video file
+                const file = videoFileInput.files[0];
+                if (!file) {
+                    alert('Please select a video file first.');
+                    return;
+                }
+
+                initInfo.innerText = 'Loading video file...';
+                const fileURL = URL.createObjectURL(file);
+                video.srcObject = null;
+                video.src = fileURL;
+                video.loop = true; // Loop the video for continuous monitoring
+                await video.play();
+                currentVideoSource = 'file';
+            }
+
+            proctor.start(video);
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            sourceCameraRadio.disabled = true;
+            sourceFileRadio.disabled = true;
+            videoFileInput.disabled = true;
+            initInfo.innerText = 'Monitoring active.';
+        } catch (err) {
+            console.error('Video source error:', err);
+            alert('Error: ' + err.message);
+            ingestUrlInput.disabled = false;
+        }
+    };
+
+    stopBtn.onclick = () => {
+        proctor.stop();
+
+        if (currentVideoSource === 'camera' && video.srcObject) {
+            video.srcObject.getTracks().forEach(t => t.stop());
+            video.srcObject = null;
+        } else if (currentVideoSource === 'file') {
+            video.pause();
+            if (video.src) {
+                URL.revokeObjectURL(video.src);
+                video.src = '';
+            }
+        }
+
+        currentVideoSource = null;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        ingestUrlInput.disabled = false;
+        sourceCameraRadio.disabled = false;
+        sourceFileRadio.disabled = false;
+        videoFileInput.disabled = false;
+        initInfo.innerText = 'Monitoring stopped.';
+    };
+
+    proctor.initialize().catch(err => console.error('Initialization failed:', err));
+</script>
+</body>
+
+</html>
