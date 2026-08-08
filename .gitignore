@@ -2,3 +2,4 @@ dist
 .npmrc
 node_modules
 .idea
+coverage
