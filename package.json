@@ -1,6 +1,6 @@
 {
   "name": "@timadey/proctor",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "AI-powered exam proctoring with MediaPipe - JavaScript library",
   "type": "module",
   "main": "dist/index.js",
@@ -34,12 +34,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Timadey/proctoring-sensors.git"
+    "url": "git+https://github.com/Timadey/proctor.git"
   },
   "bugs": {
-    "url": "https://github.com/Timadey/proctoring-sensors/issues"
+    "url": "https://github.com/Timadey/proctor/issues"
   },
-  "homepage": "https://github.com/Timadey/proctoring-sensors#readme",
+  "homepage": "https://github.com/Timadey/proctor#readme",
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.8"
   },
@@ -52,6 +52,7 @@
     "@rollup/plugin-terser": "^0.4.4",
     "eslint": "^8.52.0",
     "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.0.3",
     "rollup": "^4.1.4"
   },
